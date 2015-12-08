@@ -159,11 +159,15 @@ def transferor(url ,specific = None, talk=True, options=None):
     to_transfer = grand_total  - in_transfer_already
     grand_transfer_limit = options.maxtransfer 
     transfer_limit = grand_transfer_limit - in_transfer_already
+    # We'll allow ourselves to pick up only a few transfers that are below
+    # the current minimum priority level; minimum of 25% of the available
+    # limit or 2% of the grand total.
+    low_priority_limit = min(transfer_limit/4., grand_transfer_limit*.02)
     print "%15.4f GB already being transfered"%in_transfer_already
     print "%15.4f GB is the current requested transfer load"%to_transfer
     print "%15.4f GB is the global transfer limit"%grand_transfer_limit
     print "%15.4f GB is the available limit"%transfer_limit
-
+    print "%15.4f GB is the limit on low-priority transfers." % low_priority_limit 
 
     max_staging_per_site = options.maxstagingpersite
                     
@@ -174,6 +178,7 @@ def transferor(url ,specific = None, talk=True, options=None):
     transfer_sizes={}
     went_over_budget=False
     destination_cache = {}
+    first_rejection_priority = None
     for (wfo,wfh) in wfs_and_wfh:
         print wfh.request['RequestPriority']
         print wfo.name,"to be transfered"
@@ -186,16 +191,28 @@ def transferor(url ,specific = None, talk=True, options=None):
 
         (_,primary,_,_) = wfh.getIO()
         this_load=sum([input_sizes[prim] for prim in primary])
-        if ( this_load and (sum(transfer_sizes.values())+this_load > transfer_limit or went_over_budget ) ):
+        this_transfer_limit = transfer_limit
+        # Apply a more stringent limit to low-priority transfers if we have already rejected a
+        # high-priority transfer.
+        considering_priority_inversion = (first_rejection_priority != None) and (int(wfh.request['RequestPriority']) <  first_rejection_priority)
+        if considering_priority_inversion:
+            this_transfer_limit = low_priority_limit
+        # Reject transfers that go over budget, if we're already over budget, or if we were able to make _no_ progress
+        # on higher-priority transfers this round due to transfer size.
+        if ( this_load and ((sum(transfer_sizes.values())+this_load > this_transfer_limit) or went_over_budget \
+                            or ((needs_transfer == 0) and considering_priority_inversion)
+           ) ):
             if went_over_budget:
                 print "Transfer has gone over bubget."
             else:
                 print "Transfer will go over bubget."
             print "%15.4f GB this load"%this_load
             print "%15.4f GB already this round"%sum(transfer_sizes.values())
-            print "%15.4f GB is the available limit"%transfer_limit
-            if sum(transfer_sizes.values()) > transfer_limit:
+            print "%15.4f GB is the available limit"%this_transfer_limit
+            if sum(transfer_sizes.values()) > this_transfer_limit:
                 went_over_budget = True
+            if first_rejection_priority == None:
+                first_rejection_priority = int(wfh.request['RequestPriority'])
             if int(wfh.request['RequestPriority']) >= in_transfer_priority and min_transfer_priority!=in_transfer_priority:
                 print "Higher priority sample",wfh.request['RequestPriority'],">=",in_transfer_priority,"go-on over budget"
             else:
