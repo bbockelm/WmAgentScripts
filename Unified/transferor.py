@@ -144,19 +144,34 @@ def transferor(url ,specific = None, talk=True, options=None):
             primary_input_per_workflow_gb[wfo.name] += prim_size
     print "... done"
 
-    # shuffle first by name
-    random.shuffle( wfs_and_wfh )
-    # Sort smallest transfers first; allows us to transfer as many as possible workflows.
-    def prio_and_size( i, j):
-        if int(i[1].request['RequestPriority']) == int(j[1].request['RequestPriority']):
-            return cmp(int(primary_input_per_workflow_gb.get(j[0].name, 0)), int(primary_input_per_workflow_gb.get(i[0].name, 0)) )
-        else:
-            return cmp(int(i[1].request['RequestPriority']),int(j[1].request['RequestPriority']))
+    # Sort first by priority (descending) and then by workflow creation date (ascending)
+    # NOTE: While it might have higher throughput to sort by size, that can cause
+    # STARVATION.  As new workflows come into the system, we may never get to the largest
+    # ones.  Similarly, random order can cause STARVATION as we may not have the space to
+    # transfer an input in a single round.  Random only works if we are guaranteed to
+    # take at least one workflow each time this runs - not true!.
 
-    wfs_and_wfh.sort(cmp = prio_and_size, reverse=True)
-    #wfs_and_wfh.sort(cmp = lambda i,j : cmp(int(primary_input_per_workflow_gb.get(i[0].name, 0)), int(primary_input_per_workflow_gb.get(j[0].name, 0)) ))
-    #sort by priority higher first
-    #wfs_and_wfh.sort(cmp = lambda i,j : cmp(int(i[1].request['RequestPriority']),int(j[1].request['RequestPriority']) ), reverse=True)
+    # Using creation date causes new workflows to go to the end of the line, making sure
+    # we don't starve very large ones which may need to block the queue for a day or more.
+    def prio_and_creation_date( i, j):
+        if int(i[1].request['RequestPriority']) == int(j[1].request['RequestPriority']):
+            try:
+                # Converts
+                #    "jen_a_HIG-RunIIFall15MiniAODv2-00628_00086_v0__160205_232539_8067"
+                # to
+                #     160205232539
+                i_val = int("".join(i[0].name.rsplit("_", 3)[1:3]))
+            except ValueError:
+                i_val = 0
+            try:
+                j_val = int("".join(j[0].name.rsplit("_", 3)[1:3]))
+            except ValueError:
+                j_val = 0
+            return cmp(i_val, j_val)
+        else:
+            return -cmp(int(i[1].request['RequestPriority']),int(j[1].request['RequestPriority']))
+
+    wfs_and_wfh.sort(cmp = prio_and_creation_date)
 
     cput_grand_total = sum(input_cput.values())
     cput_to_transfer = cput_grand_total - cput_in_transfer_already
