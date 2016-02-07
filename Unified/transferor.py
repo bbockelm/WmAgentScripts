@@ -153,6 +153,9 @@ def transferor(url ,specific = None, talk=True, options=None):
 
     # Using creation date causes new workflows to go to the end of the line, making sure
     # we don't starve very large ones which may need to block the queue for a day or more.
+
+    # To help a bit with startup of new campaigns, we sort only on the creation *day*, then
+    # size.  This allows us to small workflows in first without causing significant starvation.
     def prio_and_creation_date( i, j):
         if int(i[1].request['RequestPriority']) == int(j[1].request['RequestPriority']):
             try:
@@ -160,14 +163,20 @@ def transferor(url ,specific = None, talk=True, options=None):
                 #    "jen_a_HIG-RunIIFall15MiniAODv2-00628_00086_v0__160205_232539_8067"
                 # to
                 #     160205232539
-                i_val = int("".join(i[0].name.rsplit("_", 3)[1:3]))
+                i_val = int(i[0].name.rsplit("_", 3)[1]))
             except ValueError:
                 i_val = 0
             try:
-                j_val = int("".join(j[0].name.rsplit("_", 3)[1:3]))
+                j_val = int("".join(j[0].name.rsplit("_", 3)[1:2]))
             except ValueError:
                 j_val = 0
-            return cmp(i_val, j_val)
+            if i_val == j_val:
+                i_val = int(primary_input_per_workflow_gb.get(i[0].name, 0))
+                j_val = int(primary_input_per_workflow_gb.get(j[0].name, 0))
+                # NOTE that smaller workflows go first.
+                return cmp(j_val, i_val)
+            else:
+                return cmp(i_val, j_val)
         else:
             return -cmp(int(i[1].request['RequestPriority']),int(j[1].request['RequestPriority']))
 
