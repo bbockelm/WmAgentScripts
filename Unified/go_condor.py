@@ -73,25 +73,32 @@ def makeSortAd():
 
 
 def makeResizableAd(config):
+    config.setdefault('resize_subtasks', 'DR80')
+    config['max_cores'] = {'T2_CH_CERN_HLT': 16, 'default': 4}
     if 'resize_subtasks' not in config:
         return
+    config.setdefault('max_cores', {})
+    config['max_cores'].setdefault('default', 4)
+    defaultMaxCores = config['max_cores']['default']
 
     anAd = classad.ClassAd()
     anAd["GridResource"] = "condor localhost localhost"
     anAd["TargetUniverse"] = 5
     anAd["Name"] = "Dynamic Resize Jobs"
     anAd["Requirements"] = classad.ExprTree("(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && regexp(%s, target.WMAgent_SubTask)" % classad.quote(config['resize_subtasks']))
-    anAd["copy_RequestMemory"] = "OriginalMem"
-    anAd["copy_MaxWallTimeMins"] = "OriginalMin"
-    anAd["copy_RequestCpus"] = "OriginalCores"
-    anAd["set_MinCores"] = 1
-    anAd["set_MaxCores"] = 4
+    MaxCoresExpr = ''
+    for site, cores in config['max_cores'].items():
+        if site == 'default': continue
+        if MaxCoresExpr:
+            MaxCoresExpr = 'ifThenElse(GLIDEIN_CMSSite=?=%s, %d, %s)' % (classad.quote(site), int(cores), MaxCoresExpr)
+        else:
+            MaxCoresExpr = 'ifThenElse(GLIDEIN_CMSSite=?=%s, %d, %d)' % (classad.quote(site), int(cores), defaultMaxCores)
+    if not MaxCoresExpr:
+        MaxCoresExpr = str(defaultMaxCores)
+    anAd["set_MaxCores"] = classad.ExprTree(MaxCoresExpr)
     anAd["set_WMCore_ResizeJob"] = True
     anAd["set_HasBeenResized"] = True
     anAd["set_HasBeenRouted"] = False
-    anAd["set_RequestCpus"] = classad.ExprTree('isUndefined(Cpus) ? MinCores : ((Cpus>MaxCores) ? MaxCores : Cpus)')
-    anAd["set_RequestMemory"] = classad.ExprTree('OriginalMem/OriginalCores + RequestCpus*500')
-    anAd["set_MaxWallTimeMins"] = classad.ExprTree('OriginalMin*OriginalCores/RequestCpus + 60')
     print anAd
 
 
