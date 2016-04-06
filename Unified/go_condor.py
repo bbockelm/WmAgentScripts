@@ -12,6 +12,8 @@ from collections import defaultdict
 #g_is_cern = socket.getfqdn().endswith("cern.ch")
 
 def makeAds(config):
+    makeResizableAd(config)
+
     reversed_mapping = config['reversed_mapping']
 
     needs_site = defaultdict(set)
@@ -68,6 +70,29 @@ def makeSortAd():
     anAd["set_HasBeenSorted"] = True
     anAd['set_HasBeenRouted'] = False
     #print anAd
+
+
+def makeResizableAd(config):
+    if 'resize_subtasks' not in config:
+        return
+
+    anAd = classad.ClassAd()
+    anAd["GridResource"] = "condor localhost localhost"
+    anAd["TargetUniverse"] = 5
+    anAd["Name"] = "Dynamic Resize Jobs"
+    anAd["Requirements"] = classad.ExprTree("(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && regexp(%s, target.WMAgent_SubTask)" % classad.quote(config['resize_subtasks']))
+    anAd["copy_RequestMemory"] = "OriginalMem"
+    anAd["copy_MaxWallTimeMins"] = "OriginalMin"
+    anAd["copy_RequestCpus"] = "OriginalCores"
+    anAd["set_MinCores"] = 1
+    anAd["set_MaxCores"] = 4
+    anAd["set_WMCore_ResizeJob"] = True
+    anAd["set_HasBeenResized"] = True
+    anAd["set_HasBeenRouted"] = False
+    anAd["set_RequestCpus"] = classad.ExprTree('isUndefined(Cpus) ? MinCores : ((Cpus>MaxCores) ? MaxCores : Cpus)')
+    anAd["set_RequestMemory"] = classad.ExprTree('OriginalMem/OriginalCores + RequestCpus*500')
+    anAd["set_MaxWallTimeMins"] = classad.ExprTree('OriginalMin*OriginalCores/RequestCpus + 60')
+    print anAd
 
 
 def makePrioCorrections():
