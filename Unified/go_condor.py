@@ -73,8 +73,9 @@ def makeSortAd():
 
 
 def makeResizableAd(config):
-    config.setdefault('resize_subtasks', 'DR80')
-    config['max_cores'] = {'T2_CH_CERN_HLT': 16, 'default': 4}
+    # Enable for debugging
+    #config.setdefault('resize_subtasks', 'DR80')
+    #config['max_cores'] = {'T2_CH_CERN_HLT': 16, 'default': 4}
     if 'resize_subtasks' not in config:
         return
     config.setdefault('max_cores', {})
