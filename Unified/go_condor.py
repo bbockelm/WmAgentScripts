@@ -107,9 +107,14 @@ def makeResizableAd(config):
     anAd["TargetUniverse"] = 5
     anAd["Name"] = "Dynamic Resize Jobs"
     reqs = classad.ExprTree('(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && ((target.CMS_JobType is "Processing") || (target.CMS_JobType is "Production"))')
+    addl_reqs = None
     for regex in config['resizes']:
-       reqs = reqs.and_(classad.ExprTree("regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(str(regex))))
-    anAd["Requirements"] = reqs
+       if addl_reqs:
+           addl_reqs = addl_reqs.or_(classad.ExprTree("regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(str(regex))))
+       else:
+           addl_reqs = classad.ExprTree("regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(str(regex)))
+    
+    anAd["Requirements"] = reqs.and_(addl_reqs)
     anAd["set_MaxCores"] = generate_cores_expr(config['cores'], 'max', 4)
     anAd["set_MinCores"] = generate_cores_expr(config['cores'], 'min', 1)
     anAd["set_WMCore_ResizeJob"] = True
