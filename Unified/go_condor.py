@@ -106,7 +106,7 @@ def makeResizableAd(config):
     anAd["GridResource"] = "condor localhost localhost"
     anAd["TargetUniverse"] = 5
     anAd["Name"] = "Dynamic Resize Jobs"
-    reqs = classad.ExprTree('(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && (target.CMS_JobType is "Processing")')
+    reqs = classad.ExprTree('(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && ((target.CMS_JobType is "Processing") || (target.CMS_JobType is "Production"))')
     for regex in config['resizes']:
        reqs = reqs.and_(classad.ExprTree("regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(str(regex))))
     anAd["Requirements"] = reqs
