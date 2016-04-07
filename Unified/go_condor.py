@@ -72,31 +72,46 @@ def makeSortAd():
     #print anAd
 
 
+def generate_cores_expr(cores_dict, keyname, default):
+    defaultCores = cores_dict['default'].get(keyname, default)
+    coresExpr = ''
+    for site, cores in cores_dict.items():
+        if keyname not in cores:
+            continue
+        if site == 'default':
+            continue
+        if coresExpr:
+            coresExpr = 'ifThenElse(GLIDEIN_CMSSite=?=%s, %d, %s)' % (classad.quote(site), int(cores[keyname]), defaultCores)
+        else:
+            coresExpr = 'ifThenElse(GLIDEIN_CMSSite=?=%s, %d, %d)' % (classad.quote(str(site)), int(cores[keyname]), defaultCores)
+    if not coresExpr:
+        coresExpr = str(defaultCores)
+    return classad.ExprTree(coresExpr)
+
+
 def makeResizableAd(config):
     # Enable for debugging
-    #config.setdefault('resize_subtasks', 'DR80')
-    #config['max_cores'] = {'T2_CH_CERN_HLT': 16, 'default': 4}
-    if 'resize_subtasks' not in config:
+    #config.setdefault('resizes', ['DR80'])
+    #config['cores'] = {'T2_CH_CERN_HLT': {"max": 16, "min": 4}, 'default': {"max": 4, "min": 1}, 'T2_US_Nebraska': {"max": 16, "min": 4}}
+    if 'resizes' not in config:
         return
-    config.setdefault('max_cores', {})
-    config['max_cores'].setdefault('default', 4)
-    defaultMaxCores = config['max_cores']['default']
+    config.setdefault('cores', {})
+    config['cores'].setdefault('default', {})
+    config['cores']["default"].setdefault('max', 4)
+    config['cores']["default"].setdefault('min', 1)
+    defaultMaxCores = config['cores']['default']['max']
+    defaultMinCores = config['cores']['default']['min']
 
     anAd = classad.ClassAd()
     anAd["GridResource"] = "condor localhost localhost"
     anAd["TargetUniverse"] = 5
     anAd["Name"] = "Dynamic Resize Jobs"
-    anAd["Requirements"] = classad.ExprTree("(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(config['resize_subtasks']))
-    MaxCoresExpr = ''
-    for site, cores in config['max_cores'].items():
-        if site == 'default': continue
-        if MaxCoresExpr:
-            MaxCoresExpr = 'ifThenElse(GLIDEIN_CMSSite=?=%s, %d, %s)' % (classad.quote(site), int(cores), MaxCoresExpr)
-        else:
-            MaxCoresExpr = 'ifThenElse(GLIDEIN_CMSSite=?=%s, %d, %d)' % (classad.quote(site), int(cores), defaultMaxCores)
-    if not MaxCoresExpr:
-        MaxCoresExpr = str(defaultMaxCores)
-    anAd["set_MaxCores"] = classad.ExprTree(MaxCoresExpr)
+    reqs = classad.ExprTree('(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && (target.CMS_JobType is "Processing")')
+    for regex in config['resizes']:
+       reqs = reqs.and_(classad.ExprTree("regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(str(regex))))
+    anAd["Requirements"] = reqs
+    anAd["set_MaxCores"] = generate_cores_expr(config['cores'], 'max', 4)
+    anAd["set_MinCores"] = generate_cores_expr(config['cores'], 'min', 1)
     anAd["set_WMCore_ResizeJob"] = True
     anAd["set_HasBeenResized"] = True
     anAd["set_HasBeenRouted"] = False
