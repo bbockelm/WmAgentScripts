@@ -86,7 +86,7 @@ def makeResizableAd(config):
     anAd["GridResource"] = "condor localhost localhost"
     anAd["TargetUniverse"] = 5
     anAd["Name"] = "Dynamic Resize Jobs"
-    anAd["Requirements"] = classad.ExprTree("(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && regexp(%s, target.WMAgent_SubTask)" % classad.quote(config['resize_subtasks']))
+    anAd["Requirements"] = classad.ExprTree("(target.HasBeenRouted is false) && (target.HasBeenResized isnt true) && regexp(%s, target.WMAgent_SubTaskName)" % classad.quote(config['resize_subtasks']))
     MaxCoresExpr = ''
     for site, cores in config['max_cores'].items():
         if site == 'default': continue
